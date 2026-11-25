@@ -51,3 +51,25 @@ def test_layer_rejects_incompatible_shape() -> None:
     with pytest.raises(ValueError, match="esperava 2 entradas"):
         layer.forward(np.array([[1.0, 2.0]]))
 
+
+
+def test_neuron_applies_its_own_activation() -> None:
+    neuron = Neuron(np.array([1.0, 1.0]), bias=0.0, activation="tanh")
+
+    output = neuron.forward(np.array([0.2, 0.3]))
+
+    assert neuron.z == pytest.approx(0.5)
+    assert output == pytest.approx(np.tanh(0.5))
+    assert neuron.output == pytest.approx(np.tanh(0.5))
+    assert neuron.activation_derivative() == pytest.approx(1.0 - np.tanh(0.5) ** 2)
+
+
+def test_neuron_derivative_requires_forward() -> None:
+    with pytest.raises(RuntimeError, match="forward"):
+        Neuron(np.array([1.0])).activation_derivative()
+
+
+def test_layer_neurons_share_layer_activation() -> None:
+    layer = Layer(2, 3, "relu", np.random.default_rng(1))
+
+    assert all(neuron.activation is layer.activation for neuron in layer.neurons)
