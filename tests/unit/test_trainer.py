@@ -153,3 +153,12 @@ def test_fit_detects_sample_mse_overflow_before_updating() -> None:
     neuron = network.layers[0].neurons[0]
     np.testing.assert_array_equal(neuron.weights, [0])
     assert neuron.bias == 0
+
+
+def test_fit_reports_each_epoch_to_callback() -> None:
+    received = []
+    result = Trainer().fit(
+        linear_network(), subset([1, 2], [1, 2]), subset([3], [3]),
+        epochs=3, learning_rate=0.01, seed=42, on_epoch_end=received.append,
+    )
+    assert received == list(result.history)

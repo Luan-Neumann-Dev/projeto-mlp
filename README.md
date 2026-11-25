@@ -15,7 +15,7 @@ O código implementa as operações da rede com Python e NumPy. Defina arquitetu
 - Treinamento de exemplo em 3.000 épocas, taxa de aprendizado 0,00003 e seed 42.
 - Viés da camada de saída iniciado com a média das saídas de treino (`network.output_bias_init: "train_mean"`). Veja [Ajuste do treinamento](docs/decisoes.md#ajuste-do-treinamento).
 
-- Interface: CLI com `argparse`.
+- Interface: CLI com `argparse` e interface web com Streamlit.
 - Persistência em JSON UTF-8 com `format_version: 1`.
 
 O diagnóstico e as justificativas estão em [docs/decisoes.md](docs/decisoes.md).
@@ -28,8 +28,10 @@ Requisito: Python 3.12 ou superior.
 python3.12 -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
-python -m pip install -e ".[dev]"
+python -m pip install -e ".[dev,ui]"
 ```
+
+O extra `ui` instala o Streamlit, usado só pela interface web.
 
 O modo editável disponibiliza o pacote `mlp` e o comando de terminal de mesmo nome.
 
@@ -52,7 +54,7 @@ python scripts/inspect_dataset.py
 python scripts/validate_phase1.py
 ```
 
-Ambiente verificado nesta entrega: Python 3.12.3, NumPy 2.5.5, pandas 3.1.1 e pytest 9.2.0. A suíte contém 189 testes aprovados. Consulte as verificações do [núcleo](docs/verificacao-passo-3.md), do [pipeline de dados](docs/verificacao-passo-4.md), do [treinamento](docs/verificacao-passo-5.md), da [persistência](docs/verificacao-passo-6.md) e da [CLI](docs/verificacao-passo-7.md).
+Ambiente verificado nesta entrega: Python 3.12.3, NumPy 2.5.5, pandas 3.1.1, pytest 9.2.0 e Streamlit 1.67.0. A suíte contém 191 testes aprovados. Consulte as verificações do [núcleo](docs/verificacao-passo-3.md), do [pipeline de dados](docs/verificacao-passo-4.md), do [treinamento](docs/verificacao-passo-5.md), da [persistência](docs/verificacao-passo-6.md) e da [CLI](docs/verificacao-passo-7.md).
 
 ## Pipeline de dados
 
@@ -114,6 +116,21 @@ mlp predict --model outputs/rede-experimento.json --values 450 120
 
 Os códigos de saída são `0` para sucesso, `1` para falha de execução e `2` para erro de uso. Ajuda e resultados saem em `stdout`. Mensagens de erro saem em `stderr`.
 
+## Interface web
+
+```bash
+streamlit run app.py
+```
+
+O navegador abre em `http://localhost:8501`. A interface tem quatro abas:
+
+1. **Dados**: escolhe o CSV do projeto ou envia outro, seleciona as colunas de entrada e saída, define a divisão (percentuais e seed) e liga ou desliga a normalização.
+2. **Treinamento**: monta a arquitetura (quantidade de camadas ocultas, neurônios e ativação de cada camada), define épocas, taxa de aprendizado e seeds, e treina mostrando o MSE de treino e de validação por época em um gráfico ao vivo. Permite baixar o modelo (JSON), o histórico (CSV) e a configuração em JSON compatível com a CLI.
+3. **Avaliação**: calcula o MSE de teste e mostra uma tabela com as previsões do conjunto de teste e um gráfico de previsto × esperado.
+4. **Previsão**: usa a rede treinada na sessão ou carrega um modelo salvo (pela interface ou pela CLI) e prevê a partir de valores brutos.
+
+A interface fica em `src/mlp/ui.py` e chama os mesmos módulos da CLI. Nenhum algoritmo da rede é reimplementado nela.
+
 ## Modelo salvo e previsão
 
 O modelo de exemplo treinado está em [`outputs/model.json`](outputs/model.json). A API Python disponibiliza `save_network(network, path)` e `load_network(path)`. O JSON guarda as camadas, ativações, pesos, vieses e os parâmetros do Z-score usados no treino. Basta o arquivo do modelo para prever com a rede carregada.
@@ -153,6 +170,7 @@ Responsabilidades principais do pacote:
 - `data_pipeline.py`: integra configuração, dataset, divisão, rede e normalização;
 - `trainer.py`: coordena o SGD, mede o MSE dos subconjuntos e devolve o histórico por época;
 - `persistence.py`: salva, valida e reconstrói modelos no formato JSON versionado;
-- `cli.py` e `__main__.py`: expõem a interface de linha de comando.
+- `cli.py` e `__main__.py`: expõem a interface de linha de comando;
+- `ui.py` e `app.py` (na raiz): interface web com Streamlit.
 
 

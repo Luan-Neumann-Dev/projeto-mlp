@@ -1,5 +1,6 @@
 """Coordenação de treinamento, avaliação e histórico de métricas."""
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from math import isfinite
 
@@ -40,8 +41,13 @@ class Trainer:
         learning_rate: float,
         seed: int | None = None,
         shuffle_each_epoch: bool = True,
+        on_epoch_end: Callable[[EpochMetrics], None] | None = None,
     ) -> TrainingResult:
-        """Atualiza a rede por SGD e mede treino e validação ao fim de cada época."""
+        """Atualiza a rede por SGD e mede treino e validação ao fim de cada época.
+
+        ``on_epoch_end``, se informado, recebe as métricas de cada época logo
+        após o cálculo. A interface gráfica usa isso para mostrar o progresso.
+        """
         if isinstance(epochs, bool) or not isinstance(epochs, int) or epochs <= 0:
             raise ValueError("epochs deve ser um inteiro positivo.")
         if (
@@ -100,7 +106,10 @@ class Trainer:
                     raise FloatingPointError(
                         f"Falha ao calcular o MSE ao fim da época {epoch}: {error}"
                     ) from error
-                history.append(EpochMetrics(epoch, training_mse, validation_mse))
+                metrics = EpochMetrics(epoch, training_mse, validation_mse)
+                history.append(metrics)
+                if on_epoch_end is not None:
+                    on_epoch_end(metrics)
 
         return TrainingResult(tuple(history))
 
