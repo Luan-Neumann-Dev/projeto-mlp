@@ -285,3 +285,44 @@ O normalizador usa desvio-padrão populacional (`ddof=0`). Seus parâmetros são
 
 
 
+
+## Ajuste do treinamento
+
+### Problema encontrado
+
+Com a configuração anterior (taxa 0,01, 196 épocas e vieses iniciados em zero), a rede praticamente não aprendia. O MSE de teste ficava no mesmo nível de prever sempre a média do treino e acima de uma regressão linear simples:
+
+| Seed da divisão | Configuração anterior | Prever a média | Regressão linear |
+|---:|---:|---:|---:|
+| 1 | 65.217 | 83.854 | 37.014 |
+| 7 | 42.049 | 42.597 | 33.075 |
+| 42 | 58.473 | 59.521 | 34.902 |
+| 123 | 59.764 | 57.133 | 45.601 |
+
+A causa é a escala da saída, que o enunciado não permite normalizar. A produtividade fica em torno de 2.500 kg/ha. Com vieses em zero, a rede começa prevendo cerca de 0 e os primeiros erros são da ordem de 2.500. Para produzir valores nessa escala, os pesos da camada de saída também crescem muito. Esses pesos multiplicam os deltas das camadas ocultas (`δ_j = f'(z_j) · Σ w_kj · δ_k`), e as atualizações das camadas Tanh ficam grandes demais: os neurônios saturam e o MSE oscila sem diminuir.
+
+### Ajustes
+
+1. `network.output_bias_init: "train_mean"`: o viés de cada neurônio de saída começa com a média daquela saída no conjunto de treino. Com saída Linear, a rede já começa prevendo a média, e o treino só precisa aprender os desvios em relação a ela, que são de algumas centenas de kg/ha. A média é calculada apenas no treino, então não há vazamento. A opção exige ativação linear na última camada. O padrão continua `"zero"`.
+2. Taxa de aprendizado 0,00003 e 3.000 épocas, para que as atualizações das camadas ocultas fiquem estáveis.
+
+### Escolha pela validação
+
+Foram comparadas três variações com o viés iniciado pela média. A escolha usou o MSE de validação da divisão padrão (seed 42), sem consultar o teste:
+
+| Variação | Validação (seed 42) |
+|---|---:|
+| `2 → 8 Tanh → 4 Tanh → 1 Linear`, taxa 0,00003, 3.000 épocas | **27.347** |
+| `2 → 8 Tanh → 1 Linear`, taxa 0,00003, 3.000 épocas | 36.165 |
+| `2 → 8 Tanh → 4 Tanh → 1 Linear`, taxa 0,00001, 6.000 épocas | 52.749 |
+
+### Resultado
+
+| Seed da divisão | Anterior | Atual | Regressão linear |
+|---:|---:|---:|---:|
+| 1 | 65.217 | 40.335 | 37.014 |
+| 7 | 42.049 | 29.789 | 33.075 |
+| 42 | 58.473 | **24.231** | 34.902 |
+| 123 | 59.764 | 42.473 | 45.601 |
+
+Na configuração padrão, o MSE de teste caiu de 58.473 para 24.231 (kg/ha)², ou seja, o erro típico (RMSE) passou de cerca de 242 para 156 kg/ha. O ruído entre repetições da mesma combinação de entradas é de cerca de 20.700 (kg/ha)², o que limita o MSE possível a esse patamar. Com apenas 28 exemplos de teste, os resultados variam bastante entre divisões.

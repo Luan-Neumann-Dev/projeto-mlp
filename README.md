@@ -12,7 +12,9 @@ O código implementa as operações da rede com Python e NumPy. Defina arquitetu
 - Arquitetura inicial: `2 -> 8 (tanh) -> 4 (tanh) -> 1 (linear)`.
 - Divisão: 70% treino, 15% validação e 15% teste, com seed 42.
 - Normalização: Z-score nas entradas, ajustada somente com o treino.
-- Treinamento de exemplo em 196 épocas, taxa de aprendizado 0,01 e seed 42.
+- Treinamento de exemplo em 3.000 épocas, taxa de aprendizado 0,00003 e seed 42.
+- Viés da camada de saída iniciado com a média das saídas de treino (`network.output_bias_init: "train_mean"`). Veja [Ajuste do treinamento](docs/decisoes.md#ajuste-do-treinamento).
+
 - Interface: CLI com `argparse`.
 - Persistência em JSON UTF-8 com `format_version: 1`.
 
@@ -50,7 +52,7 @@ python scripts/inspect_dataset.py
 python scripts/validate_phase1.py
 ```
 
-Ambiente verificado nesta entrega: Python 3.12.3, NumPy 2.5.5, pandas 3.1.1 e pytest 9.2.0. A suíte contém 180 testes aprovados. Consulte as verificações do [núcleo](docs/verificacao-passo-3.md), do [pipeline de dados](docs/verificacao-passo-4.md), do [treinamento](docs/verificacao-passo-5.md), da [persistência](docs/verificacao-passo-6.md) e da [CLI](docs/verificacao-passo-7.md).
+Ambiente verificado nesta entrega: Python 3.12.3, NumPy 2.5.5, pandas 3.1.1 e pytest 9.2.0. A suíte contém 189 testes aprovados. Consulte as verificações do [núcleo](docs/verificacao-passo-3.md), do [pipeline de dados](docs/verificacao-passo-4.md), do [treinamento](docs/verificacao-passo-5.md), da [persistência](docs/verificacao-passo-6.md) e da [CLI](docs/verificacao-passo-7.md).
 
 ## Pipeline de dados
 
@@ -66,8 +68,10 @@ Ambiente verificado nesta entrega: Python 3.12.3, NumPy 2.5.5, pandas 3.1.1 e py
 
 - Linear, Sigmoid estável, Tanh e ReLU, com derivadas;
 - derivada da ReLU definida como zero em `z = 0`;
+- cada neurônio aplica a ativação da sua camada e guarda `z`, saída e `delta`;
 - Xavier/Glorot para Linear, Sigmoid e Tanh;
 - He para ReLU;
+- viés da saída opcionalmente iniciado com a média das saídas de treino;
 - um único `numpy.random.Generator` por rede;
 - forward para qualquer sequência válida de camadas;
 - MSE com derivada `2 / m`;
@@ -120,7 +124,7 @@ from mlp.persistence import load_network
 
 network = load_network("outputs/model.json")
 productivity = network.predict(np.array([450.0, 120.0]))
-print(productivity[0])  # 2271.021133610547 kg/ha
+print(productivity[0])  # 2309.665609724567 kg/ha
 ```
 
 Informe os valores brutos na ordem `sementes_m2`, `nitrogenio_kg_ha`. `predict` aplica o Z-score salvo. Para vetores já preparados, o treinamento e a avaliação chamam `forward` diretamente.
