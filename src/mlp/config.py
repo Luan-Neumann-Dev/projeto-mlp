@@ -12,6 +12,9 @@ from mlp.activations import SUPPORTED_ACTIVATIONS
 from mlp.exceptions import ConfigurationError
 
 
+OUTPUT_BIAS_INIT_OPTIONS = frozenset({"zero", "train_mean"})
+
+
 @dataclass(frozen=True)
 class DatasetConfig:
     """Configuração da origem e das colunas do dataset."""
@@ -38,6 +41,7 @@ class NetworkConfig:
     input_size: int
     layers: tuple[LayerConfig, ...]
     seed: int | None
+    output_bias_init: str = "zero"
 
 
 @dataclass(frozen=True)
@@ -196,7 +200,26 @@ def _parse_network(data: dict[str, Any]) -> NetworkConfig:
                 f"Valores aceitos: {supported}."
             )
         layers.append(LayerConfig(neurons, activation))
-    return NetworkConfig(input_size, tuple(layers), _seed(data, "seed", "network"))
+
+    # "zero": todos os vieses começam em 0.
+    # "train_mean": o viés da camada de saída começa na média das saídas de
+    # treino. Só faz sentido com saída Linear, em que ŷ = z.
+    output_bias_init = data.get("output_bias_init", "zero")
+    if output_bias_init not in OUTPUT_BIAS_INIT_OPTIONS:
+        options = ", ".join(sorted(OUTPUT_BIAS_INIT_OPTIONS))
+        raise ConfigurationError(
+            f"network.output_bias_init deve ser um destes valores: {options}."
+        )
+    if output_bias_init == "train_mean" and layers[-1].activation != "linear":
+        raise ConfigurationError(
+            "network.output_bias_init 'train_mean' exige ativação linear na última camada."
+        )
+    return NetworkConfig(
+        input_size,
+        tuple(layers),
+        _seed(data, "seed", "network"),
+        output_bias_init,
+    )
 
 
 def _parse_training(data: dict[str, Any]) -> TrainingConfig:

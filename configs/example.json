@@ -27,11 +27,12 @@
         "activation": "linear"
       }
     ],
-    "seed": 42
+    "seed": 42,
+    "output_bias_init": "train_mean"
   },
   "training": {
-    "epochs": 196,
-    "learning_rate": 0.01,
+    "epochs": 3000,
+    "learning_rate": 3e-05,
     "shuffle_each_epoch": true,
     "seed": 42
   },

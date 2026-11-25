@@ -66,6 +66,8 @@ class NeuralNetwork:
             self.layers.append(layer)
             previous_size = neuron_count
 
+        # Travas de segurança: impedem calcular deltas sem um forward
+        # correspondente ou aplicar gradientes sem tê-los calculado.
         self._forward_ready = False
         self._gradients_ready = False
 
@@ -83,6 +85,28 @@ class NeuralNetwork:
     def normalization(self, data: dict[str, Any] | None) -> None:
         self.normalizer = ZScoreNormalizer.from_dict(data) if data is not None else None
 
+    def initialize_output_biases(self, training_outputs: FloatArray) -> None:
+        """Inicia os vieses da saída com a média das saídas de treino.
+
+        Com saída Linear, ``ŷ = z``, então a rede já começa prevendo a média
+        em vez de 0. Isso importa quando as saídas não são normalizadas
+        (aqui, ~2.500 kg/ha): começando do zero, os primeiros erros são
+        enormes, os gradientes saturam as camadas Tanh e a rede quase não
+        aprende. Usa apenas o conjunto de treino, então não há vazamento.
+        """
+        output_layer = self.layers[-1]
+        if output_layer.activation_name != "linear":
+            raise ValueError("A inicialização pela média exige saída linear.")
+        values = np.asarray(training_outputs, dtype=np.float64)
+        if values.ndim != 2 or values.shape[0] == 0 or values.shape[1] != self.output_size:
+            raise ValueError(
+                f"As saídas de treino devem ter formato (n, {self.output_size})."
+            )
+        if not np.isfinite(values).all():
+            raise ValueError("As saídas de treino devem conter somente valores finitos.")
+        for neuron, mean in zip(output_layer.neurons, values.mean(axis=0), strict=True):
+            neuron.bias = float(mean)
+
     def _validate_inputs(self, inputs: FloatArray) -> FloatArray:
         values = np.asarray(inputs, dtype=np.float64)
         if values.shape != (self.input_size,):
@@ -95,7 +119,12 @@ class NeuralNetwork:
         return values
 
     def forward(self, inputs: FloatArray) -> FloatArray:
-        """Propaga um vetor de entradas já preparado para a rede."""
+        """Propaga um vetor de entradas já preparado para a rede.
+
+        A saída de cada camada vira a entrada da próxima. O vetor devolvido é
+        a saída da última camada. As entradas já devem estar normalizadas; para
+        valores brutos, use ``predict``.
+        """
         current_values = self._validate_inputs(inputs)
         self._forward_ready = False
         self._gradients_ready = False
@@ -126,27 +155,43 @@ class NeuralNetwork:
         return values
 
     def compute_deltas(self, expected: FloatArray) -> None:
-        """Calcula todos os deltas sem alterar pesos ou vieses."""
+        """Calcula todos os deltas sem alterar pesos ou vieses.
+
+        O delta de um neurônio é ``δ = ∂E/∂z``: quanto o erro muda quando a
+        soma ponderada ``z`` daquele neurônio muda. Ele é calculado de trás
+        para frente pela regra da cadeia:
+
+        - camada de saída: ``δ_k = ∂E/∂ŷ_k · f'(z_k)``. Com
+          ``E = (1/n) Σ (ŷ_k - y_k)²``, temos ``∂E/∂ŷ_k = (2/n)(ŷ_k - y_k)``;
+        - camadas ocultas: ``δ_j = f'(z_j) · Σ_k w_kj · δ_k``, somando sobre
+          os neurônios ``k`` da camada seguinte que recebem a saída de ``j``.
+
+        Nenhum peso é alterado aqui. Assim os deltas das camadas ocultas usam
+        os mesmos pesos do forward deste exemplo, como exige o enunciado.
+        """
         expected_values = self._validate_expected(expected)
         output_layer = self.layers[-1]
         output_count = output_layer.neuron_count
 
+        # 1) Deltas da camada de saída: derivada do MSE vezes f'(z).
         for index, neuron in enumerate(output_layer.neurons):
             if neuron.z is None or neuron.output is None:
                 raise RuntimeError("Estado incompleto: execute forward novamente.")
             error_derivative = (2.0 / output_count) * (
                 neuron.output - expected_values[index]
             )
-            neuron.delta = error_derivative * output_layer.activation.derivative(
-                neuron.z
-            )
+            neuron.delta = error_derivative * neuron.activation_derivative()
 
+        # 2) Deltas das camadas ocultas, da penúltima até a primeira.
         for layer_index in range(len(self.layers) - 2, -1, -1):
             current_layer = self.layers[layer_index]
             next_layer = self.layers[layer_index + 1]
             for neuron_index, neuron in enumerate(current_layer.neurons):
                 if neuron.z is None:
                     raise RuntimeError("Estado incompleto: execute forward novamente.")
+                # Erro que "volta" para este neurônio: cada neurônio da camada
+                # seguinte devolve seu delta ponderado pelo peso da ligação
+                # que o conecta a este neurônio (weights[neuron_index]).
                 propagated_error = 0.0
                 for next_neuron in next_layer.neurons:
                     if next_neuron.delta is None:
@@ -154,10 +199,7 @@ class NeuralNetwork:
                     propagated_error += (
                         next_neuron.weights[neuron_index] * next_neuron.delta
                     )
-                neuron.delta = (
-                    current_layer.activation.derivative(neuron.z)
-                    * propagated_error
-                )
+                neuron.delta = neuron.activation_derivative() * propagated_error
         self._gradients_ready = True
 
     def _collect_gradients(self) -> tuple[LayerGradients, ...]:
@@ -174,6 +216,8 @@ class NeuralNetwork:
             for index, neuron in enumerate(layer.neurons):
                 if neuron.delta is None:
                     raise RuntimeError("Delta ausente durante o cálculo de gradientes.")
+                # Como z = Σ w_i·x_i + b, temos ∂z/∂w_i = x_i e ∂z/∂b = 1.
+                # Logo ∂E/∂w_i = δ·x_i e ∂E/∂b = δ.
                 weight_gradients[index] = neuron.delta * layer.last_inputs
                 bias_gradients[index] = neuron.delta
             gradients.append(LayerGradients(weight_gradients, bias_gradients))
@@ -197,10 +241,16 @@ class NeuralNetwork:
         return value
 
     def apply_gradients(self, learning_rate: float) -> None:
-        """Aplica de uma vez os gradientes calculados anteriormente."""
+        """Aplica de uma vez os gradientes calculados anteriormente.
+
+        Descida do gradiente: ``w ← w - η·∂E/∂w`` e ``b ← b - η·∂E/∂b``,
+        onde ``η`` é a taxa de aprendizado.
+        """
         rate = self._validate_learning_rate(learning_rate)
         gradients = self._collect_gradients()
 
+        # Primeiro calcula todos os novos parâmetros e confere se são finitos.
+        # Só depois grava, para não deixar a rede pela metade se algo falhar.
         updated_parameters: list[tuple[FloatArray, FloatArray]] = []
         for layer, layer_gradients in zip(self.layers, gradients, strict=True):
             new_weights = np.vstack(

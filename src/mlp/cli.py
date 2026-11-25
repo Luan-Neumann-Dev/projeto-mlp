@@ -122,6 +122,8 @@ def _train(args: argparse.Namespace) -> None:
         config.network.input_size, config.network.layers, config.network.seed
     )
     split = prepare_data(config, network).split
+    if config.network.output_bias_init == "train_mean":
+        network.initialize_output_biases(split.training.expected_outputs)
     trainer = Trainer()
     settings = config.training
     result = trainer.fit(
