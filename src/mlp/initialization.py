@@ -23,7 +23,15 @@ def initialize_xavier(
     fan_out: int,
     rng: np.random.Generator,
 ) -> FloatArray:
-    """Inicializa uma matriz de pesos com Xavier/Glorot normal."""
+    """Inicializa uma matriz de pesos com Xavier/Glorot normal.
+
+    Sorteia de ``N(0, σ²)`` com ``σ = sqrt(2 / (fan_in + fan_out))``. Essa
+    escala mantém a variância dos sinais parecida entre as camadas, o que
+    evita saturar Tanh e Sigmoid logo no início do treino.
+
+    Returns:
+        Matriz ``(fan_out, fan_in)``: uma linha de pesos por neurônio.
+    """
     _validate_sizes(fan_in, fan_out)
     _validate_rng(rng)
     standard_deviation = np.sqrt(2.0 / (fan_in + fan_out))
@@ -38,7 +46,11 @@ def initialize_he(
     fan_out: int,
     rng: np.random.Generator,
 ) -> FloatArray:
-    """Inicializa uma matriz de pesos com He normal."""
+    """Inicializa uma matriz de pesos com He normal.
+
+    Sorteia de ``N(0, σ²)`` com ``σ = sqrt(2 / fan_in)``. O fator 2 compensa
+    a ReLU zerar, em média, metade das saídas.
+    """
     _validate_sizes(fan_in, fan_out)
     _validate_rng(rng)
     standard_deviation = np.sqrt(2.0 / fan_in)

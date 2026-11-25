@@ -60,20 +60,30 @@ class Trainer:
 
         self._validate_subset(network, training, "treino")
         self._validate_subset(network, validation, "validação")
+        # Gerador próprio do treino: a ordem dos exemplos em cada época é
+        # reproduzível com a mesma seed.
         rng = np.random.default_rng(seed)
         ordered_indices = range(training.sample_count)
         history: list[EpochMetrics] = []
 
+        # Overflow ou NaN viram exceção em vez de estragar a rede em silêncio
+        # (sinal típico de taxa de aprendizado alta demais).
         with np.errstate(over="raise", invalid="raise"):
             for epoch in range(1, epochs + 1):
                 indices = (
                     rng.permutation(training.sample_count)
                     if shuffle_each_epoch else ordered_indices
                 )
+                # SGD: um passo de atualização por exemplo de treino.
                 for index in indices:
                     expected = training.expected_outputs[index]
                     try:
+                        # forward guarda z e saída de cada neurônio; backward
+                        # usa esses valores para os deltas e atualiza a rede.
                         prediction = network.forward(training.inputs[index])
+                        # O valor não é usado: calcular o erro do exemplo aqui
+                        # serve para detectar overflow (errstate acima) antes
+                        # de qualquer peso ser alterado.
                         mean_squared_error(prediction, expected)
                         network.backward(expected, learning_rate)
                     except FloatingPointError as error:
@@ -81,6 +91,8 @@ class Trainer:
                             f"Falha numérica na época {epoch}, índice de treino {index}: {error}"
                         ) from error
 
+                # Métricas ao fim da época, com os pesos já atualizados.
+                # A validação só é medida: nunca entra no backward.
                 try:
                     training_mse = self.evaluate(network, training)
                     validation_mse = self.evaluate(network, validation)

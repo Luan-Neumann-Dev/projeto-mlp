@@ -265,6 +265,8 @@ def split_dataset(
     if test_count == 0:
         raise DatasetError("A divisão resultou em teste vazio.")
 
+    # Embaralha os índices uma única vez e fatia em três partes, então
+    # nenhum exemplo se repete nem fica de fora.
     indices = np.random.default_rng(seed).permutation(dataset.sample_count)
     train_end = train_count
     validation_end = train_count + validation_count

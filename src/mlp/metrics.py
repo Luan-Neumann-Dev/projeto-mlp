@@ -11,7 +11,11 @@ if TYPE_CHECKING:
 
 
 def mean_squared_error(predicted: FloatArray, expected: FloatArray) -> float:
-    """Calcula o MSE incluindo todas as posições dos arrays."""
+    """Calcula o MSE incluindo todas as posições dos arrays.
+
+    ``MSE = (1/n) Σ (previsto - esperado)²``. Com várias saídas e vários
+    exemplos, a média é feita sobre todos os valores.
+    """
     predicted_array = np.asarray(predicted, dtype=np.float64)
     expected_array = np.asarray(expected, dtype=np.float64)
     if predicted_array.shape != expected_array.shape:

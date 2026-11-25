@@ -66,7 +66,11 @@ class ZScoreNormalizer:
         return matrix
 
     def fit(self, training_inputs: FloatArray) -> "ZScoreNormalizer":
-        """Calcula média e desvio populacional usando apenas o treino."""
+        """Calcula média e desvio populacional usando apenas o treino.
+
+        Usar só o treino evita vazamento: validação e teste não podem
+        influenciar nenhum parâmetro aprendido, nem os da normalização.
+        """
         values = self._validate_matrix(training_inputs)
         means = values.mean(axis=0)
         raw_standard_deviations = values.std(axis=0, ddof=0)
@@ -84,7 +88,10 @@ class ZScoreNormalizer:
         return self
 
     def transform(self, inputs: FloatArray) -> FloatArray:
-        """Aplica os parâmetros ajustados sem modificar a entrada."""
+        """Aplica os parâmetros ajustados sem modificar a entrada.
+
+        ``x_normalizado = (x - média_treino) / desvio_treino``, por coluna.
+        """
         if self.means is None or self.standard_deviations is None:
             raise NormalizationError(
                 "O normalizador precisa ser ajustado antes da transformação."

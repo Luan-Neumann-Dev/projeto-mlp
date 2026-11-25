@@ -21,7 +21,11 @@ def linear_derivative(z: float) -> float:
 
 
 def sigmoid(z: float) -> float:
-    """Retorna a Sigmoid de ``z`` usando uma forma estável."""
+    """Retorna a Sigmoid de ``z`` usando uma forma estável.
+
+    ``σ(z) = 1 / (1 + e^(-z))``. Para ``z`` muito negativo, ``e^(-z)``
+    estoura; por isso usamos a forma equivalente ``e^z / (1 + e^z)``.
+    """
     value = float(z)
     if value >= 0.0:
         exp_neg_z = np.exp(-value)
@@ -32,7 +36,7 @@ def sigmoid(z: float) -> float:
 
 
 def sigmoid_derivative(z: float) -> float:
-    """Retorna a derivada da Sigmoid em ``z``."""
+    """Retorna a derivada da Sigmoid em ``z``: ``σ(z)·(1 - σ(z))``."""
     output = sigmoid(z)
     return output * (1.0 - output)
 
@@ -43,13 +47,13 @@ def tanh(z: float) -> float:
 
 
 def tanh_derivative(z: float) -> float:
-    """Retorna a derivada da tangente hiperbólica em ``z``."""
+    """Retorna a derivada da tangente hiperbólica em ``z``: ``1 - tanh(z)²``."""
     output = tanh(z)
     return 1.0 - output * output
 
 
 def relu(z: float) -> float:
-    """Retorna a ReLU de ``z``."""
+    """Retorna a ReLU de ``z``: ``max(0, z)``."""
     return max(0.0, float(z))
 
 
